@@ -1,4 +1,4 @@
-//Date and Time
+// Date and Time
 const today = new Date();
 const nextThreeDays = new Date(today);
 nextThreeDays.setDate(today.getDate() + 3);
@@ -7,15 +7,17 @@ const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Fri
 const dayOfWeek = daysOfWeek[nextThreeDays.getDay()];
 const date = nextThreeDays.toLocaleDateString();
 
-//Cart JS
-//Function to save data to local storage
+// Cart JS
+// Function to save data to local storage
 function saveToLocalStorage(key, newData) {
   let existingData = getFromLocalStorage(key) || [];
 
-  // Check for duplicates and add only unique products
+  // Check for duplicates and update quantity if product already exists
   newData.forEach(newProduct => {
-    const isDuplicate = existingData.some(existingProduct => existingProduct.name === newProduct.name);
-    if (!isDuplicate) {
+    const existingProduct = existingData.find(product => product.name === newProduct.name);
+    if (existingProduct) {
+      existingProduct.quantity = newProduct.quantity;
+    } else {
       existingData.push(newProduct);
     }
   });
@@ -48,6 +50,21 @@ function searchFetch(products) {
     });
   });
 
+  // Add event listeners for quantity buttons
+  document.querySelectorAll('.cartItmPMBtn.plus').forEach(button => {
+    button.addEventListener('click', function() {
+      const productName = this.getAttribute('data-name');
+      changeItemQuantity(productName, 1);
+    });
+  });
+
+  document.querySelectorAll('.cartItmPMBtn.minus').forEach(button => {
+    button.addEventListener('click', function() {
+      const productName = this.getAttribute('data-name');
+      changeItemQuantity(productName, -1);
+    });
+  });
+
   updateCartDisplay(products);
   updatePriceDetail(products);
 }
@@ -57,8 +74,8 @@ let totalItems = 0;
 
 // Function to generate HTML for a cart item
 function fetchCartData(item) {
-  totalItems += 1;
-  totalPrice += item.price;
+  totalItems += item.quantity;
+  totalPrice += item.price * item.quantity;
 
   return `
   <div class="cartItmListInviewCart bg-white">
@@ -84,9 +101,9 @@ function fetchCartData(item) {
       <div class="row">
         <div class="plusMinItm col-sm-6">
           <div class="d-flex justify-content-center align-items-center">
-            <button class="cartItmPMBtn" disabled=""> – </button>
-            <div class="cartItmQty"><input type="text" class="text-center" value="1" style="width:50px"></div>
-            <button class="cartItmPMBtn"> + </button>
+            <button class="cartItmPMBtn minus" data-name="${item.name}"> – </button>
+            <div class="cartItmQty"><input type="text" class="text-center" value="${item.quantity}" style="width:50px" readonly></div>
+            <button class="cartItmPMBtn plus" data-name="${item.name}"> + </button>
           </div>
         </div>
         <div class="cartItmSfLRm d-flex justify-content-around align-items-center col-sm-6">
@@ -101,7 +118,7 @@ function fetchCartData(item) {
 
 // Function to confirm and remove an item from the cart
 function confirmRemoveItem(name) {
-  const confirmRemove = confirm(`Are you sure you want to remove "${name}" from the cart?`);
+  const confirmRemove = confirm(`Click OK if you want to remove "${name}" from cart`);
   if (confirmRemove) {
     removeItem(name);
   }
@@ -118,6 +135,22 @@ function removeItem(name) {
 
   // Show success popup
   showPopup(`"${name}" has been removed from your cart successfully.`);
+}
+
+// Function to change the quantity of an item in the cart
+function changeItemQuantity(name, change) {
+  let existingData = getFromLocalStorage("filteredProducts") || [];
+  const updatedData = existingData.map(item => {
+    if (item.name === name) {
+      item.quantity = Math.max(1, item.quantity + change);
+    }
+    return item;
+  });
+
+  localStorage.setItem("filteredProducts", JSON.stringify(updatedData));
+
+  // Update the displayed cart and price details
+  searchFetch(updatedData);
 }
 
 // Function to show a popup message
@@ -150,8 +183,8 @@ function updateCartDisplay(filteredProducts) {
 
 // Function to update the price detail section
 function updatePriceDetail(products) {
-  totalItems = products.length;
-  totalPrice = products.reduce((acc, item) => acc + item.price, 0);
+  totalItems = products.reduce((acc, item) => acc + item.quantity, 0);
+  totalPrice = products.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
   let priceDetail = `
     <div style="display: flex; flex-direction: column;">
@@ -183,7 +216,10 @@ fetch("../json-api/product.json")
   .then(response => response.json())
   .then(data => {
     const query = getQueryParameter("query");
-    const filteredProducts = data.filter(product => product.name === query);
+    const filteredProducts = data.filter(product => product.name === query).map(product => ({
+      ...product,
+      quantity: 1 // Add default quantity
+    }));
 
     // Save filtered products to local storage without overwriting existing data
     saveToLocalStorage("filteredProducts", filteredProducts);
@@ -195,4 +231,3 @@ fetch("../json-api/product.json")
     searchFetch(savedFilteredProducts);
   })
   .catch(error => console.error("Error fetching data:", error));
-// end
